@@ -122,8 +122,7 @@ std::string sha256(const std::string &input)
 
 bool verify_password(char *server_password, char client_password[])
 {
-    std::string password = sha256(client_password);
-    if (server_password == password.c_str())
+    if (server_password == sha256(client_password).c_str())
     {
         return true;
     }
@@ -134,12 +133,12 @@ bool verify_password(char *server_password, char client_password[])
 }
 
 void connection_info(struct sockaddr_in &client)
-{ 
+{
     char *connected_ip = inet_ntoa(client.sin_addr);
-    int port = ntohs(client.sin_port); 
+    int port = ntohs(client.sin_port);
 
-    std::cout << "-[IP:" << connected_ip << ", Connected on PORT:" << port << "]" << std::endl; 
-} 
+    std::cout << "-[IP:" << connected_ip << ", Connected on PORT:" << port << "]" << std::endl;
+}
 
 int main(int argc, char *argv[])
 {
@@ -207,10 +206,11 @@ int main(int argc, char *argv[])
     while (1)
     {
         // https://stackoverflow.com/questions/25091148/single-tcp-ip-server-that-handles-multiple-clients-in-c
-        struct sockaddr_in client_info = {0}; 
+        struct sockaddr_in client_info = {0};
         int addrlen = sizeof(client_info);
         int clientSocket;
-        if (clientSocket = accept(master_socket, (struct sockaddr *)&client_info, (socklen_t*)&addrlen)<0) {
+        if (clientSocket = accept(master_socket, (struct sockaddr *)&client_info, (socklen_t *)&addrlen) < 0)
+        {
             perror("accept failed");
             exit(EXIT_FAILURE);
         };
@@ -222,17 +222,19 @@ int main(int argc, char *argv[])
         char message[] = "What's your password:\n";
         send(clientSocket, message, strlen(message), 0);
         recv(clientSocket, client_password, sizeof(client_password), 0);
-        //std::cout << server_password << " " << client_password << std::endl;
-        if (verify_password(server_password, client_password)) {
+
+        if (verify_password(server_password, client_password))
+        {
             char buffer[1024] = {0};
             recv(clientSocket, buffer, sizeof(buffer), 0);
             std::cout << "Message from client: " << buffer << std::endl;
             respond(clientSocket, buffer);
-        } else {
+        }
+        else
+        {
             char message[] = "Wrong password!";
             send(clientSocket, message, strlen(message), 0);
         }
-
 
         close(clientSocket);
     }
