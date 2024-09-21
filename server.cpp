@@ -222,7 +222,7 @@ int main(int argc, char *argv[])
         char message[] = "What's your password:\n";
         send(clientSocket, message, strlen(message), 0);
         recv(clientSocket, client_password, sizeof(client_password), 0);
-        std::cout << server_password << " " << client_password << std::endl;
+        //std::cout << server_password << " " << client_password << std::endl;
         if (verify_password(server_password, client_password)) {
             char buffer[1024] = {0};
             recv(clientSocket, buffer, sizeof(buffer), 0);
