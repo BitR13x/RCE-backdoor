@@ -2,6 +2,7 @@
 .vscode
 .gdb_history
 .hashpassword
+.access_history
 
 server.out
 server

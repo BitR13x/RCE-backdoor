@@ -91,6 +91,9 @@ int openSocket(in_addr_t s_addr, int server_port)
 
 std::string generateRandomString(int length)
 {
+    // randomize seed
+    srand(time(NULL));
+
     static const std::string characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     std::string randomString;
     for (int i = 0; i < length; ++i)
@@ -122,7 +125,7 @@ std::string sha256(const std::string &input)
 
 bool verify_password(char *server_password, char client_password[])
 {
-    if (server_password == sha256(client_password).c_str())
+    if (std::string(server_password) == sha256(client_password))
     {
         return true;
     }
@@ -209,7 +212,7 @@ int main(int argc, char *argv[])
         struct sockaddr_in client_info = {0};
         int addrlen = sizeof(client_info);
         int clientSocket;
-        if (clientSocket = accept(master_socket, (struct sockaddr *)&client_info, (socklen_t *)&addrlen) < 0)
+        if ((clientSocket = accept(master_socket, (struct sockaddr *)&client_info, (socklen_t *)&addrlen)) < 0)
         {
             perror("accept failed");
             exit(EXIT_FAILURE);
@@ -218,22 +221,57 @@ int main(int argc, char *argv[])
         // print client IP and connected port
         connection_info(client_info);
 
-        char client_password[buffer_size];
+        char client_password[buffer_size] = {0};
         char message[] = "What's your password:\n";
-        send(clientSocket, message, strlen(message), 0);
-        recv(clientSocket, client_password, sizeof(client_password), 0);
+
+        if (send(clientSocket, message, strlen(message), 0) < 0) {
+            perror("send failed");
+            close(clientSocket);
+            continue;
+        }
+
+        int bytes_received = recv(clientSocket, client_password, buffer_size-1, 0);
+        if (bytes_received <= 0) {
+            perror("recv failed or connection closed");
+            close(clientSocket);
+            continue;
+        }
+
+        // overwrite newline with null-termination
+        if (client_password[bytes_received-1] == '\n') {
+            client_password[bytes_received-1] = '\0';
+        } else {
+            client_password[bytes_received] = '\0';
+        }
+
 
         if (verify_password(server_password, client_password))
         {
-            char buffer[1024] = {0};
-            recv(clientSocket, buffer, sizeof(buffer), 0);
-            std::cout << "Message from client: " << buffer << std::endl;
-            respond(clientSocket, buffer);
+            // write allowed access history
+            FILE *w_file = fopen(".access_history", "w");
+            char *connected_ip = inet_ntoa(client_info.sin_addr);
+            fwrite(connected_ip, sizeof(char), strlen(connected_ip), w_file);
+            fclose(w_file);
+
+            // execute commands
+            char command_buffer[1024] = {0};
+            while (std::string(command_buffer) != "bye") {
+                // clear command buffer
+                memset(command_buffer, 0, sizeof(command_buffer));
+
+                if (recv(clientSocket, command_buffer, sizeof(command_buffer), 0) <= 0) {
+                    perror("command recv failed or connection closed");
+                    break;
+                };
+
+                std::cout << "Message from client:" << command_buffer << std::endl;
+                respond(clientSocket, command_buffer);
+            }
         }
         else
         {
-            char message[] = "Wrong password!";
-            send(clientSocket, message, strlen(message), 0);
+            char wrong_password_message[] = "Wrong password!";
+            send(clientSocket, wrong_password_message, strlen(wrong_password_message), 0);
         }
 
         close(clientSocket);
