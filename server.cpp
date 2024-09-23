@@ -35,12 +35,30 @@ std::string exec(const char *cmd)
     return result;
 }
 
+void parse_recv(char *recv_output, int bytes_received)
+{
+    // overwrite newline with null-termination
+    if (recv_output[bytes_received - 1] == '\n')
+    {
+        recv_output[bytes_received - 1] = '\0';
+    }
+    else
+    {
+        recv_output[bytes_received] = '\0';
+    }
+};
+
 int respond(int client_slot, char *client_command)
 {
     std::string output = exec(client_command);
-    const char *response = output.c_str();
+    if (output.length() > 0) {
+        const char *response = output.c_str();
+        send(client_slot, response, strlen(response), 0);
+    } else {
+        char error_message[] = "Command failed!";
+        send(client_slot, error_message, strlen(error_message), 0);
+    }
 
-    send(client_slot, response, strlen(response), 0);
     return 0;
 }
 
@@ -224,47 +242,69 @@ int main(int argc, char *argv[])
         char client_password[buffer_size] = {0};
         char message[] = "What's your password:\n";
 
-        if (send(clientSocket, message, strlen(message), 0) < 0) {
+        if (send(clientSocket, message, strlen(message), 0) < 0)
+        {
             perror("send failed");
             close(clientSocket);
             continue;
         }
 
-        int bytes_received = recv(clientSocket, client_password, buffer_size-1, 0);
-        if (bytes_received <= 0) {
+        int bytes_received = recv(clientSocket, client_password, buffer_size - 1, 0);
+        if (bytes_received <= 0)
+        {
             perror("recv failed or connection closed");
             close(clientSocket);
             continue;
         }
 
-        // overwrite newline with null-termination
-        if (client_password[bytes_received-1] == '\n') {
-            client_password[bytes_received-1] = '\0';
-        } else {
-            client_password[bytes_received] = '\0';
-        }
-
+        // null-byte
+        parse_recv(client_password, bytes_received);
 
         if (verify_password(server_password, client_password))
         {
             // write allowed access history
-            FILE *w_file = fopen(".access_history", "w");
+            FILE *w_file = fopen(".access_history", "a");
             char *connected_ip = inet_ntoa(client_info.sin_addr);
             fwrite(connected_ip, sizeof(char), strlen(connected_ip), w_file);
             fclose(w_file);
 
+            const char correct_password_message[] = "Correct password!\n\n";
+            if (send(clientSocket, correct_password_message, strlen(correct_password_message), 0) < 0)
+            {
+                perror("send correct_password_message failed");
+                close(clientSocket);
+                continue;
+            }
+
             // execute commands
-            char command_buffer[1024] = {0};
-            while (std::string(command_buffer) != "bye") {
+            char command_buffer[buffer_size] = {0};
+            while (std::string(command_buffer) != "bye")
+            {
                 // clear command buffer
                 memset(command_buffer, 0, sizeof(command_buffer));
 
-                if (recv(clientSocket, command_buffer, sizeof(command_buffer), 0) <= 0) {
+                int bytes_received = recv(clientSocket, command_buffer, buffer_size - 1, 0);
+                if (bytes_received <= 0)
+                {
                     perror("command recv failed or connection closed");
                     break;
                 };
 
-                std::cout << "Message from client:" << command_buffer << std::endl;
+                parse_recv(command_buffer, bytes_received);
+
+                /* 
+                //check buffer bytes
+                for (int i = 0; i < buffer_size; i++)
+                {
+                    std::cout << std::hex <<  (int)command_buffer[i] << " ";
+                }
+                */
+
+                //std::cout << "Message from client: " << command_buffer << " " << bytes_received << std::endl;
+                if (std::string(command_buffer) == "bye") {
+                    break;
+                }
+
                 respond(clientSocket, command_buffer);
             }
         }

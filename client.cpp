@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
 
     char ip_addr[] = "127.0.0.1";
     // args: ip_addr, file, password
-    string commands[1024] = {};
+
     if (argc > 1)
     {
         if (argv[1] == std::string("--help") || argv[1] == std::string("-h"))
@@ -26,18 +26,6 @@ int main(int argc, char *argv[])
         }
 
         strncpy(client_password, argv[1], buffer_size);
-
-        if (argc > 2)
-        {
-            ifstream file(argv[2]);
-            string line;
-            while (getline(file, line))
-            {
-                //cout << line << endl;
-                commands->append(line);
-            }
-            file.close();
-        }
     } /* else {
         cout << argv[0] << " <password>" << " <filename>" << endl;
         return 0;
@@ -66,7 +54,8 @@ int main(int argc, char *argv[])
 
     // comunication
     char server_message[buffer_size];
-    if (recv(clientSocket, server_message, sizeof(server_message), 0) <= 0) {
+    if (recv(clientSocket, server_message, sizeof(server_message), 0) <= 0)
+    {
         perror("recv failed or connection closed");
         close(clientSocket);
         exit(EXIT_FAILURE);
@@ -77,18 +66,21 @@ int main(int argc, char *argv[])
     // clear buffer
     memset(server_message, 0, sizeof(server_message));
 
+    // client password
     if (argc == 1)
     {
         read(0, client_password, buffer_size);
     }
 
-    if (send(clientSocket, client_password, strlen(client_password), 0) < 0) {
+    if (send(clientSocket, client_password, strlen(client_password), 0) < 0)
+    {
         perror("send failed");
         close(clientSocket);
         exit(EXIT_FAILURE);
     }
 
-    if (recv(clientSocket, server_message, sizeof(server_message), 0) <= 0) {
+    if (recv(clientSocket, server_message, sizeof(server_message), 0) <= 0)
+    {
         perror("recv failed or connection closed");
         close(clientSocket);
         exit(EXIT_FAILURE);
@@ -102,21 +94,50 @@ int main(int argc, char *argv[])
     }
     else
     {
-        if (commands[0].empty())
+        if (argc <= 2)
         {
             char command[buffer_size];
-            read(0, command, buffer_size);
-            send(clientSocket, command, strlen(command), 0);
+            while (1)
+            {
+                memset(command, 0, sizeof(command));
+
+                read(0, command, buffer_size);
+                send(clientSocket, command, strlen(command), 0);
+
+                memset(server_message, 0, sizeof(server_message));
+                if (std::string(command) == "bye" || std::string(command) == "bye\n")
+                {
+                    break;
+                }
+
+                recv(clientSocket, server_message, sizeof(server_message), 0);
+                cout << server_message << endl;
+            }
         }
         else
         {
-            for (int i = 0; i < 1024; i++)
+            ifstream file(argv[2]);
+            string line;
+            while (getline(file, line))
             {
-                if (!commands[i].empty())
+                if (send(clientSocket, line.c_str(), line.length(), 0) < 0)
                 {
-                    send(clientSocket, commands[i].c_str(), commands[i].length(), 0);
+                    perror("send failed");
+                    close(clientSocket);
+                    exit(EXIT_FAILURE);
                 }
+
+                memset(server_message, 0, sizeof(server_message));
+                if (recv(clientSocket, server_message, sizeof(server_message), 0) <= 0)
+                {
+                    perror("Command-file recv failed or connection closed");
+                    close(clientSocket);
+                    exit(EXIT_FAILURE);
+                }
+
+                cout << server_message << endl;
             }
+            file.close();
         }
     }
 
